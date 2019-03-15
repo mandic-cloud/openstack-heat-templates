@@ -1,0 +1,103 @@
+heat_template_version: 2016-04-08
+
+description: Security group AD para gerenciado
+
+parameters:
+  subnet:
+    type: string
+    description: Subnet remota
+    default: "10.0.0.0/24"
+
+resources:
+  sec_group:
+    type: OS::Neutron::SecurityGroup
+    properties:
+      rules:
+      - remote_ip_prefix: { get_param: subnet }
+        protocol: icmp
+      - remote_ip_prefix: ::/0
+        ethertype: IPv6
+        protocol: icmp
+      - remote_ip_prefix: { get_param: subnet }
+        protocol: tcp
+        port_range_min: 42
+        port_range_max: 42
+      - remote_ip_prefix: { get_param: subnet }
+        protocol: tcp
+        port_range_min: 53
+        port_range_max: 53
+      - remote_ip_prefix: 2804:5d4:1:1020::/64
+        ethertype: IPv6
+        protocol: tcp
+        port_range_min: 53
+        port_range_max: 53
+      - remote_ip_prefix: { get_param: subnet }
+        protocol: tcp
+        port_range_min: 88
+        port_range_max: 88
+      - remote_ip_prefix: { get_param: subnet }
+        protocol: tcp
+        port_range_min: 135
+        port_range_max: 135
+      - remote_ip_prefix: { get_param: subnet }
+        protocol: tcp
+        port_range_min: 139
+        port_range_max: 139
+      - remote_ip_prefix: { get_param: subnet }
+        protocol: tcp
+        port_range_min: 389
+        port_range_max: 389
+      - remote_ip_prefix: { get_param: subnet }
+        protocol: tcp
+        port_range_min: 445
+        port_range_max: 445
+      - remote_ip_prefix: { get_param: subnet }
+        protocol: tcp
+        port_range_min: 464
+        port_range_max: 464
+      - remote_ip_prefix: { get_param: subnet }
+        protocol: tcp
+        port_range_min: 636
+        port_range_max: 636
+      - remote_ip_prefix: { get_param: subnet }
+        protocol: tcp
+        port_range_min: 3268
+        port_range_max: 3269
+      - remote_ip_prefix: 2804:5d4:1:f000::8/128
+        ethertype: IPv6
+        protocol: tcp
+        port_range_min: 10050
+        port_range_max: 10052
+      - remote_ip_prefix: { get_param: subnet }
+        protocol: tcp
+        port_range_min: 49152
+        port_range_max: 65535
+      - remote_ip_prefix: { get_param: subnet }
+        protocol: udp
+        port_range_min: 42
+        port_range_max: 42
+      - remote_ip_prefix: { get_param: subnet }
+        protocol: udp
+        port_range_min: 53
+        port_range_max: 53
+      - remote_ip_prefix: { get_param: subnet }
+        protocol: udp
+        port_range_min: 88
+        port_range_max: 88
+      - remote_ip_prefix: { get_param: subnet }
+        protocol: udp
+        port_range_min: 123
+        port_range_max: 123
+      - remote_ip_prefix: { get_param: subnet }
+        protocol: udp
+        port_range_min: 137
+        port_range_max: 138
+      - remote_ip_prefix: { get_param: subnet }
+        protocol: udp
+        port_range_min: 389
+        port_range_max: 389
+      - remote_ip_prefix: { get_param: subnet }
+        protocol: udp
+        port_range_min: 464
+        port_range_max: 464
+

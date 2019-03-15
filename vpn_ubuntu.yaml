@@ -1,0 +1,168 @@
+heat_template_version: 2016-04-08
+
+description: A VPN Gateway
+
+parameters:
+
+  right:
+    type: string
+    description: Right IP
+  right_subnet:
+    type: string
+    description: Right subnet
+  right_source_ip:
+    type: string
+    description: Right source IP
+  flavor:
+    type: string
+    description: Flavor used for servers
+    constraints:
+    - custom_constraint: nova.flavor
+    default: g1.micro
+#  image:
+#    type: string
+#    description: Image used for servers
+#    constraints:
+#    - custom_constraint: glance.image
+#    default: linux-centos-7-64b-base
+  private_network:
+    type: string
+    description: Network used by the VPN gateway as LEFT net
+    constraints:
+    - custom_constraint: neutron.network
+  private_subnet_cidr:
+    type: string
+    description: Subnet cidr used by the VPN gateway as LEFT subnet
+    constraints:
+    - custom_constraint: neutron.subnet
+  key_name:
+    type: string
+    description: An ssh keypair name used for accessing the server.
+    constraints:
+    - custom_constraint: nova.keypair
+  public_network:
+    type: string
+    description: Public network
+    constraints:
+    - custom_constraint: neutron.network
+    default: net-ext
+
+resources:
+
+  sec_group:
+    type: OS::Neutron::SecurityGroup
+    properties:
+      rules:
+      - remote_ip_prefix: 0.0.0.0/0
+        protocol: tcp
+        port_range_min: 500
+        port_range_max: 500
+      - remote_ip_prefix: 0.0.0.0/0
+        protocol: udp
+        port_range_min: 500
+        port_range_max: 500
+      - remote_ip_prefix: 0.0.0.0/0
+        protocol: udp
+        port_range_min: 4500
+        port_range_max: 4500
+      - remote_ip_prefix: 0.0.0.0/0
+        protocol: icmp
+      - remote_ip_prefix: 0.0.0.0/0
+        protocol: tcp
+        port_range_min: 22
+        port_range_max: 22 
+
+  servervpn_port:
+    type: OS::Neutron::Port
+    properties:
+      network_id: { get_param: private_network }
+      allowed_address_pairs:
+        - ip_address: { get_param: right_subnet }
+      security_groups: [{ get_resource: sec_group }]
+
+  floating_ip:
+    type: OS::Neutron::FloatingIP
+    properties:
+      floating_network: { get_param: public_network }
+      port_id: { get_resource: servervpn_port }
+
+  servervpn:
+    type: OS::Nova::Server
+    properties:
+      image: "linux-centos-7-64b-base"
+      flavor: { get_param: flavor }
+      networks:
+        - port: { get_resource: servervpn_port }
+      user_data_format: RAW
+      key_name: { get_param: key_name }
+      user_data:
+        str_replace:
+          template: |
+            #!/bin/bash
+            sudo -i
+            sudo yum install -y libreswan NetworkManager-libreswan pwgen ipsec-tools
+            echo 1 > /proc/sys/net/ipv4/ip_forward
+            echo 0 > /proc/sys/net/ipv4/conf/default/rp_filter
+            echo 0 > /proc/sys/net/ipv4/conf/lo/rp_filter
+            echo 0 > /proc/sys/net/ipv4/conf/eth0/rp_filter
+            echo 0 > /proc/sys/net/ipv4/conf/all/accept_redirects
+            echo 0 > /proc/sys/net/ipv4/conf/default/accept_redirects
+            echo 0 > /proc/sys/net/ipv4/conf/eth0/accept_redirects
+            mv /etc/ipsec.conf /etc/ipsec.conf_orig
+            cat <<EOF > /etc/ipsec.conf
+            version 2.0     # conforms to second version of ipsec.conf specification
+            config setup
+               listen=%defaultsource
+               protostack=netkey
+               nat_traversal=yes
+               force_keepalive=yes
+               virtual_private=%v4:LEFTSUB
+               oe=off
+               plutostderrlog=/var/log/pluto.log
+               plutodebug=all
+            include /etc/ipsec.d/*.conf
+            EOF
+            cat <<EOF > /etc/ipsec.d/mandic.conf
+            conn ROSSI_CISPER
+               keyexchange=ike
+               aggrmode=no
+               type=tunnel
+               ike=3des-sha1;modp1024
+               phase2alg=3des-sha1
+               pfs=no
+               ikelifetime=8h
+               keylife=1h
+               left=LEFT
+               leftid=LEFTID
+               leftsourceip=LEFT
+               leftsubnet=LEFTSUB
+               right=RIGHT
+               rightsubnet=RIGHTSUB
+               rightsourceip=RIGHTSOURCE
+               #auth=esp
+               authby=secret
+               auto=start
+            EOF
+            systemctl start ipsec
+            systemctl enable ipsec
+          params:
+            LEFT:    { get_attr: [ servervpn_port, fixed_ips, 0, ip_address ]}
+            LEFTID:  { get_attr: [ floating_ip, floating_ip_address ]}
+            LEFTSUB: { get_param: private_subnet_cidr }
+            RIGHT: { get_param: right }
+            RIGHTSUB: { get_param: right_subnet }
+            RIGHTSOURCE: { get_param: right_source_ip }
+
+outputs:
+
+  lburl:
+    description: URL of the right VPN Gateway
+    value:
+      str_replace:
+        template: http://IP_ADDRESS:PORT
+        params:
+          IP_ADDRESS: { get_attr: [ floating_ip, floating_ip_address ] }
+          PORT: { get_param: servervpn_port }
+    description: >
+      This URL is the "external" URL that can be used to access the
+      VPN gateway.

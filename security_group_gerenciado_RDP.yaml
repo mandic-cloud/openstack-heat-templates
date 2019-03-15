@@ -1,0 +1,24 @@
+heat_template_version: 2016-04-08
+
+description: Security group RDP para gerenciado
+
+parameters:
+  ips_for_rdp:
+    label: ips_for_rdp
+    type: comma_delimited_list
+    description: IPs para RDP
+    default: "177.70.122.29/32,177.70.100.56/32"
+
+resources:
+  sec_group:
+    type: OS::Neutron::SecurityGroup
+    properties:
+      rules:
+        repeat:
+          for_each:
+           "ip%": { get_param: ips_for_rdp }
+          template:
+            protocol: tcp
+            remote_ip_prefix: ip%
+            port_range_min: 3389
+            port_range_max: 3389
